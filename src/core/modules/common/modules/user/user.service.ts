@@ -29,8 +29,9 @@ export class UserService {
     return user;
   }
 
-  async findAll(): Promise<any[]> {
-    const users = this.prisma.user.findMany({select:{id:true, profile:{select:{username:true}}}})
-    return users;
+  async findAll(): Promise<{users: any[]}> {
+    const users = this.prisma.user.findMany({select:{id:true, profile:{select:{username:true, bio: true, birthDate:true, _count:{select:{posts:true}}}}}});
+    const usersFormatted = (await users).map((user)=>({id:user.id,username:user.profile.username,bio:user.profile.bio,birthDate:user.profile.birthDate, numberOfPosts:user.profile._count.posts}))
+    return {users: usersFormatted};
   }
 }
