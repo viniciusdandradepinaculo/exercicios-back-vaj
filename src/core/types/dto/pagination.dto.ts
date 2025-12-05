@@ -64,7 +64,7 @@ export class PaginatedResponseDto<T> {
     this.page = page;
     this.limit = limit;
     this.totalPages = Math.ceil(total / limit);
-    this.query = query;
     this.data = data;
+    this.query = query;
   }
 }
