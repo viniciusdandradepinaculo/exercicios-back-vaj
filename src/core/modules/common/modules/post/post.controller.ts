@@ -4,6 +4,7 @@ import { JwtAuthGuard } from 'src/utils/guards/jwt-auth.guard';
 import { Doc } from 'src/utils/documentation/doc';
 import { EditPostDto } from './dto/edit-post.dto';
 import { ApiTags } from '@nestjs/swagger';
+import { UserId } from 'src/utils/decorators/user-id.decorator';
 
 @ApiTags('Private/Posts')
 @UseGuards(JwtAuthGuard)
@@ -16,8 +17,8 @@ export class PostController {
     description: `Edit a user's post`,
   })
   @Post('/:postId')
-  async edit(@Param('postId') postId: string, @Body() body: EditPostDto) {
-    return await this.postService.edit({ postId, body });
+  async edit(@Param('postId') postId: string, @UserId() userId:string, @Body() body: EditPostDto) {
+    return await this.postService.edit({ postId,userId, body });
   }
 
   @Doc({
@@ -25,7 +26,7 @@ export class PostController {
     description: `Delete a user's post`,
   })
   @Delete('/:postId')
-  async delete(@Param('postId') postId: string) {
-    return await this.postService.delete({ postId });
+  async delete(@Param('postId') postId: string, @UserId() userId:string) {
+    return await this.postService.delete({ postId, userId });
   }
 }
