@@ -36,7 +36,7 @@ export class AuthenticationService {
   ): Promise<string | null> {
     const { password } = user;
 
-    const validPassword = informedPassword === password;
+    const validPassword = await bcrypt.compare(informedPassword,password);
 
     if (!validPassword) {
       return null;
@@ -88,14 +88,16 @@ export class AuthenticationService {
       throw new AppErrorConflict('E-mail já cadastrado');
     }
 
+    const hashedPassword = await bcrypt.hash(password,10)
+
     const user = await this.prismaService.user.create({
       data: {
         email,
-        password,
+        password:hashedPassword,
       },
     });
 
-    const token = await this.validateAndGenerateToken(user, password);
+    const token = await this.validateAndGenerateToken(user, hashedPassword);
 
     return {
       id: user.id,
