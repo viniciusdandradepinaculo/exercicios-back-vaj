@@ -7,18 +7,24 @@ import {
   AppErrorMethodNotAllowed,
 } from 'src/utils/errors/app-errors';
 import { UserId } from 'src/utils/decorators/user-id.decorator';
+import { Post } from 'generated/prisma/client';
 
 @Injectable()
 export class PostService {
   constructor(private readonly prismaService: PrismaService) {}
   //Tipar retorno
-  async edit(params: { postId: string; body: EditPostDto; userId: string }): Promise<any> {
+  async edit(params: { postId: string; body: EditPostDto; userId: string }): Promise<Post> {
     const { postId, body, userId } = params;
     const postToBeEdited = await this.prismaService.post.findUnique({
       where: { id: postId },
     });
 
-    if (userId !== postToBeEdited.authorId) {
+    // if (userId !== postToBeEdited.authorId) {
+    //   throw new AppErrorForbidden('Não é possível atualizar posts de outros usuários.');
+    // }
+    const userProfile = await this.prismaService.profile.findUnique({ where: { id: postToBeEdited.authorId } });
+
+    if (userProfile.userId !== userId) {
       throw new AppErrorForbidden('Não é possível atualizar posts de outros usuários.');
     }
 
@@ -38,14 +44,22 @@ export class PostService {
       where: { id: postId },
     });
 
-    if (userId !== postToBeDeleted.authorId) {
+    // if (userId !== postToBeDeleted.authorId) {
+    //   throw new AppErrorForbidden('Não é possível deletar posts de outros usuários.');
+    // }
+
+    const userProfile = await this.prismaService.profile.findUnique({
+      where: { id: postToBeDeleted.authorId },
+    });
+
+    if (userProfile.userId !== userId) {
       throw new AppErrorForbidden('Não é possível deletar posts de outros usuários.');
     }
 
     if (postToBeDeleted.deleted === true) {
       throw new AppErrorConflict('Post já deletado.');
     }
-    // Implementar soft delete
-    await this.prismaService.post.update({where:{id:postId},data:{deleted:true}});
+
+    await this.prismaService.post.update({ where: { id: postId }, data: { deleted: true } });
   }
 }
