@@ -1,9 +1,34 @@
-import { Controller } from '@nestjs/common';
+import { Body, Controller, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { DocumentService } from './document.service';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from 'src/utils/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/utils/guards/roles.guard';
+import { Roles } from 'src/utils/decorators/roles.decorator';
+import { UserRole } from 'generated/prisma';
+import { Doc } from 'src/utils/documentation/doc';
+import { UserId } from 'src/utils/decorators/user-id.decorator';
+import { UploadUserDocumentDto } from './dto/document.dto';
+import { UserDocumentResponse } from './dto/document-response.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('User/Documents')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.USER)
 @Controller('/user/documents')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
+  @Post()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @Doc({
+    description: 'Upload de documento do usuário',
+    name: 'Upload de documento',
+  })
+  async uploadDocument(
+    @UserId() userId: string,
+    @Body() body: UploadUserDocumentDto,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<UserDocumentResponse> {
+    return this.documentService.uploadDocument(userId, body, file);
+  }
 }
