@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEnum, IsNotEmpty, IsString, Matches } from 'class-validator';
 import { DocumentType } from 'generated/prisma';
 
 export class UploadUserDocumentDto {
@@ -14,5 +15,7 @@ export class UploadUserDocumentDto {
   @ApiProperty({ example: '1234567890' })
   @IsString()
   @IsNotEmpty()
+  @Transform(({ value }) => value.replace(/\D/g, ''))
+  @Matches(/^\d+$/, { message: 'O número deve conter apenas dígitos' })
   number: string;
 }

@@ -27,7 +27,11 @@ export class DocumentService {
     }
   }
 
-  async uploadDocument(userId: string, dto: UploadUserDocumentDto, file:Express.Multer.File):Promise<UserDocumentResponse> {
+  async uploadDocument(
+    userId: string,
+    dto: UploadUserDocumentDto,
+    file: Express.Multer.File,
+  ): Promise<UserDocumentResponse> {
     const { type, number } = dto;
 
     if (!file) {
@@ -83,5 +87,45 @@ export class DocumentService {
     });
     document.file = await this.fileService.updateFileUrl(document.file);
     return document;
+  }
+  async listDocumentsUser(userId: string): Promise<UserDocumentResponse[]> {
+    const userDocs = await this.prismaService.document.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        type: true,
+        number: true,
+        validated: true,
+        createdAt: true,
+        file: {
+          select: {
+            id: true,
+            url: true,
+          },
+        },
+      },
+    });
+    await this.fileService.updateUrlsInObjects(userDocs);
+    return userDocs;
+  }
+
+  async deleteDocument(userId: string, documentId: string): Promise<void> {
+    const document = await this.prismaService.document.findFirst({
+      where: { id: documentId, userId },
+      select: { id: true, fileId: true, validated: true },
+    });
+    if (!document) {
+      throw new AppErrorMethodNotAllowed('Documento inválido.');
+    }
+    if (document.validated) {
+      throw new AppErrorMethodNotAllowed('Não é possível deletar um documento validado');
+    }
+
+    await this.prismaService.$transaction(async (tx) => {
+      if (document.fileId) {
+        await this.fileService.deleteFile(document.fileId);
+      }
+    });
   }
 }

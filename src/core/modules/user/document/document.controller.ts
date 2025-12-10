@@ -1,4 +1,14 @@
-import { Body, Controller, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { DocumentService } from './document.service';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/utils/guards/jwt-auth.guard';
@@ -30,5 +40,26 @@ export class DocumentController {
     @UploadedFile() file: Express.Multer.File,
   ): Promise<UserDocumentResponse> {
     return this.documentService.uploadDocument(userId, body, file);
+  }
+
+  @Get()
+  @Doc({
+    description: 'Listagem de documentos do usuário',
+    name: 'Listagem de documentos',
+  })
+  async listDocumentsUser(@UserId() userId: string): Promise<UserDocumentResponse[]> {
+    return this.documentService.listDocumentsUser(userId);
+  }
+
+  @Delete(':documentId')
+  @Doc({
+    description: 'Deleção de documento',
+    name: 'Deleção de documento',
+  })
+  async deleteDocument(
+    @UserId() userId: string,
+    @Param('documentId') documentId: string,
+  ): Promise<void> {
+    await this.documentService.deleteDocument(userId, documentId);
   }
 }
