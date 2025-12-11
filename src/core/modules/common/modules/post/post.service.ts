@@ -5,6 +5,7 @@ import {
   AppErrorConflict,
   AppErrorForbidden,
   AppErrorMethodNotAllowed,
+  AppErrorNotFound,
 } from 'src/utils/errors/app-errors';
 import { UserId } from 'src/utils/decorators/user-id.decorator';
 import { Post } from 'generated/prisma/client';
@@ -16,21 +17,19 @@ export class PostService {
   async edit(params: { postId: string; body: EditPostDto; userId: string }): Promise<Post> {
     const { postId, body, userId } = params;
     const postToBeEdited = await this.prismaService.post.findUnique({
-      where: { id: postId },
+      where: {
+        id: postId,
+        author: { userId },
+        deleted: false,
+      },
     });
+    if (!postToBeEdited) {
+      throw new AppErrorNotFound('Post não encontrado.');
+    }
 
     // if (userId !== postToBeEdited.authorId) {
     //   throw new AppErrorForbidden('Não é possível atualizar posts de outros usuários.');
     // }
-    const userProfile = await this.prismaService.profile.findUnique({ where: { id: postToBeEdited.authorId } });
-
-    if (userProfile.userId !== userId) {
-      throw new AppErrorForbidden('Não é possível atualizar posts de outros usuários.');
-    }
-
-    if (postToBeEdited.deleted === true) {
-      throw new AppErrorConflict('Post inválido para edição.');
-    }
 
     return await this.prismaService.post.update({
       where: { id: postId },
@@ -41,23 +40,19 @@ export class PostService {
   async delete(params: { postId: string; userId: string }): Promise<void> {
     const { postId, userId } = params;
     const postToBeDeleted = await this.prismaService.post.findUnique({
-      where: { id: postId },
+      where: {
+        id: postId,
+        author: { userId },
+        deleted: false,
+      },
     });
 
     // if (userId !== postToBeDeleted.authorId) {
     //   throw new AppErrorForbidden('Não é possível deletar posts de outros usuários.');
     // }
 
-    const userProfile = await this.prismaService.profile.findUnique({
-      where: { id: postToBeDeleted.authorId },
-    });
-
-    if (userProfile.userId !== userId) {
-      throw new AppErrorForbidden('Não é possível deletar posts de outros usuários.');
-    }
-
-    if (postToBeDeleted.deleted === true) {
-      throw new AppErrorConflict('Post já deletado.');
+    if (!postToBeDeleted) {
+      throw new AppErrorNotFound('Post não encontrado');
     }
 
     await this.prismaService.post.update({ where: { id: postId }, data: { deleted: true } });

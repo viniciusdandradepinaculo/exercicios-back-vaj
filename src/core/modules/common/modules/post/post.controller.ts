@@ -11,7 +11,7 @@ import { UserId } from 'src/utils/decorators/user-id.decorator';
 @Controller('private/posts')
 export class PostController {
   constructor(private readonly postService: PostService) {}
-
+  //adicionar responses
   @Doc({
     name: 'Edit post',
     description: `Edit a user's post`,
