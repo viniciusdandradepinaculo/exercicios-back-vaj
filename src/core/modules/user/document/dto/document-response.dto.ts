@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { DocumentType } from 'generated/prisma';
+import { PaginatedResponseDto, PaginationDto } from 'src/core/types/dto/pagination.dto';
 
 export class FileResponse {
   @ApiProperty()
@@ -12,13 +13,12 @@ export class FileResponse {
 export class UserDocumentResponse {
   @ApiProperty()
   id: string;
-  
+
   @ApiProperty()
   type: DocumentType;
-  
+
   @ApiProperty()
   number: string;
-
 
   @ApiProperty()
   validated: boolean;
@@ -26,6 +26,11 @@ export class UserDocumentResponse {
   @ApiProperty()
   createdAt: Date;
 
-  @ApiProperty({type:()=>FileResponse})
-  file:FileResponse
+  @ApiProperty({ type: FileResponse })
+  file: FileResponse;
+}
+
+export class ListUserDocsPagination extends PaginatedResponseDto<UserDocumentResponse> {
+  @ApiProperty({ type: [UserDocumentResponse] })
+  data: UserDocumentResponse[];
 }

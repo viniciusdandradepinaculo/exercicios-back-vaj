@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { DocumentType } from 'generated/prisma';
 import { PrismaService } from 'src/integrations/persistence/database/prisma/prisma.service';
 import { FileService } from 'src/integrations/persistence/storage/file/file.service';
-import { AppErrorMethodNotAllowed } from 'src/utils/errors/app-errors';
+import {
+  AppErrorBadRequest,
+  AppErrorMethodNotAllowed,
+  AppErrorNotFound,
+} from 'src/utils/errors/app-errors';
 import { UploadUserDocumentDto } from './dto/document.dto';
 import { ENUM_OPERATOR_TYPE } from 'src/integrations/persistence/storage/file/file.enum';
 import { UserDocumentResponse } from './dto/document-response.dto';
@@ -14,15 +18,15 @@ export class DocumentService {
     private readonly fileService: FileService,
   ) {}
 
-  private validateDocumentSize(type: DocumentType, code: string) {
+  private validateDocumentCodeSize(type: DocumentType, code: string) {
     const length = code.length;
     if (type === DocumentType.RG) {
       if (length < 7 || length > 9) {
-        throw new AppErrorMethodNotAllowed('O código do RG deve ter de 7 a 9 números.');
+        throw new AppErrorBadRequest('O código do RG deve ter de 7 a 9 números.');
       }
     } else {
       if (length !== 11) {
-        throw new AppErrorMethodNotAllowed(`O código de ${type} deve ter exatamente 11 números.`);
+        throw new AppErrorBadRequest(`O código de ${type} deve ter exatamente 11 números.`);
       }
     }
   }
@@ -35,7 +39,7 @@ export class DocumentService {
     const { type, number } = dto;
 
     if (!file) {
-      throw new AppErrorMethodNotAllowed('É necessário fornecer um arquivo.');
+      throw new AppErrorNotFound('É necessário fornecer um arquivo.');
     }
     const documentTypeUploaded = await this.prismaService.document.findFirst({
       where: {
@@ -48,7 +52,7 @@ export class DocumentService {
       throw new AppErrorMethodNotAllowed('Só é possível salvar um documento por tipo.');
     }
 
-    this.validateDocumentSize(type, number);
+    this.validateDocumentCodeSize(type, number);
 
     const document = await this.prismaService.$transaction(async (tx) => {
       const createdDocument = await tx.document.create({
@@ -59,6 +63,7 @@ export class DocumentService {
           userId,
         },
       });
+
       const savedFile = await this.fileService.saveFile({
         file,
         entity: 'user-document',
@@ -66,6 +71,7 @@ export class DocumentService {
         entityId: createdDocument.id,
         operatorId: userId,
       });
+
       const updatedDocument = await tx.document.update({
         where: { id: createdDocument.id },
         data: { fileId: savedFile.id },
@@ -85,7 +91,7 @@ export class DocumentService {
       });
       return updatedDocument;
     });
-    document.file = await this.fileService.updateFileUrl(document.file);
+
     return document;
   }
   async listDocumentsUser(userId: string): Promise<UserDocumentResponse[]> {
@@ -106,8 +112,9 @@ export class DocumentService {
         },
       },
     });
-    await this.fileService.updateUrlsInObjects(userDocs);
-    return userDocs;
+
+    const updatedUserDocs = await this.fileService.updateUrlsInObjects(userDocs);
+    return updatedUserDocs;
   }
 
   async deleteDocument(userId: string, documentId: string): Promise<void> {
@@ -116,16 +123,14 @@ export class DocumentService {
       select: { id: true, fileId: true, validated: true },
     });
     if (!document) {
-      throw new AppErrorMethodNotAllowed('Documento inválido.');
+      throw new AppErrorNotFound('Documento não encontrado.');
     }
     if (document.validated) {
-      throw new AppErrorMethodNotAllowed('Não é possível deletar um documento validado');
+      throw new AppErrorBadRequest('Não é possível deletar um documento validado');
     }
 
-    await this.prismaService.$transaction(async (tx) => {
-      if (document.fileId) {
-        await this.fileService.deleteFile(document.fileId);
-      }
-    });
+    if (document.fileId) {
+      await this.fileService.deleteFile(document.fileId);
+    }
   }
 }

@@ -3,9 +3,13 @@ import { PrismaService } from 'src/integrations/persistence/database/prisma/pris
 import { FileService } from 'src/integrations/persistence/storage/file/file.service';
 import { AdminListDocsDto } from './dto/admin-list-docs.dto';
 import { PaginatedResponseDto } from 'src/core/types/dto/pagination.dto';
-import { UserDocumentResponse } from 'src/core/modules/user/document/dto/document-response.dto';
+import { ListUserDocsPagination, UserDocumentResponse } from 'src/core/modules/user/document/dto/document-response.dto';
 import { Prisma } from 'generated/prisma';
-import { AppErrorMethodNotAllowed } from 'src/utils/errors/app-errors';
+import {
+  AppErrorConflict,
+  AppErrorMethodNotAllowed,
+  AppErrorNotFound,
+} from 'src/utils/errors/app-errors';
 
 @Injectable()
 export class AdminUserService {
@@ -16,7 +20,7 @@ export class AdminUserService {
 
   async listAllUserDocs(
     query: AdminListDocsDto,
-  ): Promise<PaginatedResponseDto<UserDocumentResponse>> {
+  ): Promise<ListUserDocsPagination> {
     const page = query.page;
     const limit = query.limit;
     const offset = (page - 1) * limit;
@@ -26,10 +30,12 @@ export class AdminUserService {
     if (query.type) {
       validationAndTypeFilter.type = query.type;
     }
+
     if (query.validated !== undefined) {
       validationAndTypeFilter.validated = query.validated === 'true';
     }
-    const [total, documents] = await this.prismaService.$transaction([
+
+    const [total, documents] = await Promise.all([
       this.prismaService.document.count({ where: validationAndTypeFilter }),
       this.prismaService.document.findMany({
         where: validationAndTypeFilter,
@@ -50,9 +56,10 @@ export class AdminUserService {
         },
       }),
     ]);
-    await this.fileService.updateUrlsInObjects(documents);
+
+    const urlUpdatedDocuments = await this.fileService.updateUrlsInObjects(documents);
     return new PaginatedResponseDto<UserDocumentResponse>({
-      data: documents,
+      data: urlUpdatedDocuments,
       total,
       page,
       limit,
@@ -62,6 +69,7 @@ export class AdminUserService {
       },
     });
   }
+
   async aproveDocument(documentId: string): Promise<UserDocumentResponse> {
     const document = await this.prismaService.document.findUnique({
       where: { id: documentId },
@@ -81,11 +89,11 @@ export class AdminUserService {
     });
 
     if (!document) {
-      throw new AppErrorMethodNotAllowed('Documento não encontrado.');
+      throw new AppErrorNotFound('Documento não encontrado.');
     }
-
+    //lembrar de corrigir app errors
     if (document.validated) {
-      throw new AppErrorMethodNotAllowed('Documento já foi validado.');
+      throw new AppErrorConflict('Documento já foi validado.');
     }
 
     const updatedDocument = await this.prismaService.document.update({
@@ -105,10 +113,13 @@ export class AdminUserService {
         },
       },
     });
+    //Atualizaçao das urls da amazon
 
-    if (updatedDocument.file) {
-      await this.fileService.updateFileUrl(updatedDocument.file);
-    }
-    return updatedDocument;
+    const updatedFile = await this.fileService.updateFileUrl(updatedDocument.file);
+
+    return {
+      ...updatedDocument,
+      file: updatedFile,
+    };
   }
 }

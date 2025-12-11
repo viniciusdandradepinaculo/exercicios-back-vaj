@@ -27,18 +27,20 @@ import { FileInterceptor } from '@nestjs/platform-express';
 @Controller('/user/documents')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
+  //Adicionar Responses
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @Doc({
     description: 'Upload de documento do usuário',
     name: 'Upload de documento',
+    response: UserDocumentResponse,
   })
   async uploadDocument(
     @UserId() userId: string,
     @Body() body: UploadUserDocumentDto,
     @UploadedFile() file: Express.Multer.File,
-  ): Promise<UserDocumentResponse> {
+  ) {
     return this.documentService.uploadDocument(userId, body, file);
   }
 
@@ -46,8 +48,10 @@ export class DocumentController {
   @Doc({
     description: 'Listagem de documentos do usuário',
     name: 'Listagem de documentos',
+    response: UserDocumentResponse,
+    isArray: true,
   })
-  async listDocumentsUser(@UserId() userId: string): Promise<UserDocumentResponse[]> {
+  async listDocumentsUser(@UserId() userId: string) {
     return this.documentService.listDocumentsUser(userId);
   }
 
@@ -56,10 +60,7 @@ export class DocumentController {
     description: 'Deleção de documento',
     name: 'Deleção de documento',
   })
-  async deleteDocument(
-    @UserId() userId: string,
-    @Param('documentId') documentId: string,
-  ): Promise<void> {
+  async deleteDocument(@UserId() userId: string, @Param('documentId') documentId: string) {
     await this.documentService.deleteDocument(userId, documentId);
   }
 }
