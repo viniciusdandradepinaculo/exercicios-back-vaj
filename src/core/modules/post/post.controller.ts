@@ -5,10 +5,13 @@ import {
   Get,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { PostService } from './post.service';
 import { JwtAuthGuard } from 'src/utils/guards/jwt-auth.guard';
@@ -16,7 +19,7 @@ import { Doc } from 'src/utils/documentation/doc';
 import { EditPostDto } from './dto/edit-post.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 import { ListPostsDto } from './dto/list-posts.dto';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { UserId } from 'src/utils/decorators/user-id.decorator';
 import {
   EditPostResponse,
@@ -24,6 +27,8 @@ import {
   PostResponse,
   ListPostsResponse,
 } from './doc/post.doc';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { CreatePostFormDto } from './dto/create-post-form.dto';
 
 @ApiTags('Private/Posts')
 @UseGuards(JwtAuthGuard)
@@ -37,9 +42,15 @@ export class PostController {
     response: CreatePostResponse,
     statusCode: HttpStatus.CREATED,
   })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
   @Post()
-  async create(@UserId() userId: string, @Body() body: CreatePostDto) {
-    return await this.postService.create({ userId, body });
+  async create(
+    @UserId() userId: string,
+    @Body() body: CreatePostFormDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return await this.postService.create({ userId, body, file });
   }
 
   @Doc({
@@ -59,7 +70,7 @@ export class PostController {
   })
   @Get('/:postId')
   async findById(@UserId() userId: string, @Param('postId') postId: string) {
-    return await this.postService.findById({ userId, postId });
+    return await this.postService.findByIdOrThrow({ userId, postId });
   }
 
   @Doc({
@@ -80,5 +91,20 @@ export class PostController {
   @Delete('/:postId')
   async delete(@UserId() userId: string, @Param('postId') postId: string) {
     await this.postService.delete({ userId, postId });
+  }
+
+  @Doc({
+    name: 'Atualizar cover de post',
+    description: 'Atualiza capa do post especificado',
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @Patch('/:postId/image')
+  async updateImage(
+    @UserId() userId: string,
+    @Param('postId') postId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return await this.postService.updateImage({ userId, postId, file });
   }
 }

@@ -7,10 +7,15 @@ import { AppErrorNotFound } from 'src/utils/errors/app-errors';
 import { Prisma } from 'generated/prisma';
 import { EditPostResponse, CreatePostResponse, ListPostsResponse } from './doc/post.doc';
 import { PaginatedResponseDto } from 'src/core/types/dto/pagination.dto';
+import { FileService } from 'src/integrations/persistence/storage/file/file.service';
+import { ENUM_OPERATOR_TYPE } from 'src/integrations/persistence/storage/file/file.enum';
 
 @Injectable()
 export class PostService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly fileService: FileService,
+  ) {}
 
   private async getUserProfile(userId: string) {
     const profile = await this.prismaService.profile.findUnique({
@@ -24,7 +29,7 @@ export class PostService {
     return profile;
   }
 
-  async findById({ userId, postId }: { userId: string; postId: string }) {
+  async findByIdOrThrow({ userId, postId }: { userId: string; postId: string }) {
     const post = await this.prismaService.post.findUnique({
       where: {
         id: postId,
@@ -39,6 +44,7 @@ export class PostService {
         content: true,
         createdAt: true,
         updatedAt: true,
+        file: { select: { id: true, url: true } },
       },
     });
 
@@ -46,32 +52,88 @@ export class PostService {
       throw new AppErrorNotFound('Post not found');
     }
 
-    return post;
+    const urlUpdatedFile = post.file ? await this.fileService.updateFileUrl(post.file) : null;
+
+    return {
+      ...post,
+      file: urlUpdatedFile,
+    };
   }
 
   async create({
     userId,
     body,
+    file,
   }: {
     userId: string;
     body: CreatePostDto;
+    file?: Express.Multer.File;
   }): Promise<CreatePostResponse> {
     const profile = await this.getUserProfile(userId);
 
-    return await this.prismaService.post.create({
-      data: {
-        title: body.title,
-        content: body.content,
-        authorId: profile.id,
-      },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    if (!file) {
+      const post = await this.prismaService.post.create({
+        data: {
+          title: body.title,
+          content: body.content,
+          authorId: profile.id,
+        },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          updatedAt: true,
+          file: { select: { id: true, url: true } },
+        },
+      });
+      return post;
+    }
+
+    const postWithCover = await this.prismaService.$transaction(async (tx) => {
+      const post = await tx.post.create({
+        data: {
+          title: body.title,
+          content: body.content,
+          authorId: profile.id,
+        },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      const cover = await this.fileService.saveFile({
+        file,
+        operatorId: userId,
+        entity: 'post-cover',
+        operatorType: ENUM_OPERATOR_TYPE.USER,
+        entityId: post.id,
+      });
+
+      const postUpdatedWithCover = await tx.post.update({
+        where: { id: post.id },
+        data: { fileId: cover.id },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          updatedAt: true,
+          file: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
+        },
+      });
+      return postUpdatedWithCover;
     });
+    return postWithCover;
   }
 
   async list({
@@ -99,6 +161,12 @@ export class PostService {
           content: true,
           createdAt: true,
           updatedAt: true,
+          file: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -106,9 +174,9 @@ export class PostService {
       }),
       this.prismaService.post.count({ where }),
     ]);
-
+    const postsWithUpdatedUrls = await this.fileService.updateUrlsInObjects(posts);
     return new PaginatedResponseDto({
-      data: posts,
+      data: postsWithUpdatedUrls,
       total,
       page,
       limit,
@@ -124,7 +192,7 @@ export class PostService {
     postId: string;
     body: EditPostDto;
   }): Promise<EditPostResponse> {
-    await this.findById({ userId, postId });
+    await this.findByIdOrThrow({ userId, postId });
 
     return await this.prismaService.post.update({
       where: { id: postId },
@@ -140,11 +208,72 @@ export class PostService {
   }
 
   async delete({ userId, postId }: { userId: string; postId: string }): Promise<void> {
-    await this.findById({ userId, postId });
+    const post = await this.findByIdOrThrow({ userId, postId });
+
+    // await this.prismaService.$transaction(async (tx) => {
+    //   await tx.post.update({
+    //     where: { id: postId },
+    //     data: { deleted: true },
+    //   });
+
+    //   if (post.file) {
+    //     await this.fileService.deleteFile(post.file.id);
+    //   }
+    // });
 
     await this.prismaService.post.update({
       where: { id: postId },
       data: { deleted: true },
     });
+    
+    if (post.file) {
+      await this.fileService.deleteFile(post.file.id);
+    }
+  }
+
+  async updateImage({
+    userId,
+    postId,
+    file,
+  }: {
+    userId: string;
+    postId: string;
+    file: Express.Multer.File;
+  }) {
+    const currentPost = await this.findByIdOrThrow({ userId, postId });
+
+    const updatedPost = await this.prismaService.$transaction(async (tx) => {
+      if (currentPost.file) {
+        await this.fileService.deleteFile(currentPost.file.id);
+      }
+
+      const newCover = await this.fileService.saveFile({
+        file,
+        operatorId: userId,
+        entity: 'post-cover',
+        operatorType: ENUM_OPERATOR_TYPE.USER,
+        entityId: postId,
+      });
+
+      return await tx.post.update({
+        where: { id: postId },
+        data: { fileId: newCover.id },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          createdAt: true,
+          updatedAt: true,
+          file: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
+        },
+      });
+    });
+
+    return updatedPost;
   }
 }

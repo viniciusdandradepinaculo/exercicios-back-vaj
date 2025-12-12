@@ -46,6 +46,19 @@ async function main() {
       },
     });
   }
+  await prisma.user.create({
+    data: {
+      email: 'test@pinaculo.dev',
+      password: bcrypt.hashSync('123456', 10),
+      profile: {
+        create: {
+          username: 'test.user',
+          bio: 'Usuário de teste',
+          birthDate: new Date('1995-01-01'),
+        },
+      },
+    },
+  });
 
   console.log('Database seeded!');
 }

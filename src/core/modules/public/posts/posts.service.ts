@@ -4,10 +4,14 @@ import { ListPostsDto } from '../../post/dto/list-posts.dto';
 import { ListPostsWithAutorResponse } from '../../post/doc/post.doc';
 import { PaginatedResponseDto } from 'src/core/types/dto/pagination.dto';
 import { Prisma } from 'generated/prisma';
+import { FileService } from 'src/integrations/persistence/storage/file/file.service';
 
 @Injectable()
 export class PublicPostsService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly fileService: FileService,
+  ) {}
 
   async listPublic(query: ListPostsDto): Promise<ListPostsWithAutorResponse> {
     const { page, limit, author, title } = query;
@@ -40,6 +44,12 @@ export class PublicPostsService {
               username: true,
             },
           },
+          file: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -47,9 +57,10 @@ export class PublicPostsService {
       }),
       this.prismaService.post.count({ where }),
     ]);
+    const urlUpdatedPosts = await this.fileService.updateUrlsInObjects(posts);
 
     return new PaginatedResponseDto({
-      data: posts,
+      data: urlUpdatedPosts,
       total,
       page,
       limit,

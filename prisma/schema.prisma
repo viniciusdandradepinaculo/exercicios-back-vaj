@@ -50,6 +50,9 @@ model Post {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  fileId String? @unique
+  file File? @relation(fields:[fileId], references:[id], onDelete:SetNull)
+
   @@map("posts")
 }
 
@@ -69,6 +72,9 @@ model File {
   expiresAt DateTime @map("expires_at") //data de validade da url
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  post Post? 
+
 
   @@unique([entityId, entity])
   @@map("files")

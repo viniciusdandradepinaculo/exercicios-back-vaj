@@ -1,5 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginatedResponseDto } from 'src/core/types/dto/pagination.dto';
+
+export class FileResponse {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  url: string;
+}
 
 class AuthorResponse {
   @ApiProperty({ example: 'john_doe' })
@@ -21,6 +29,9 @@ export class PostResponse {
 
   @ApiProperty({ example: '2025-01-02T00:00:00.000Z' })
   updatedAt: Date;
+
+  @ApiPropertyOptional({ type: FileResponse, nullable: true })
+  file?: FileResponse;
 }
 
 export class EditPostResponse extends PostResponse {}
